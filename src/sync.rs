@@ -1,4 +1,4 @@
-#[cfg(not(feature = "async_std_unstable"))]
+#[cfg(not(feature = "async_std"))]
 mod imp {
     use std::sync::mpsc;
 
@@ -20,27 +20,24 @@ mod imp {
     }
 }
 
-#[cfg(feature = "async_std_unstable")]
+#[cfg(feature = "async_std")]
 mod imp {
-    use async_std::sync;
+    use async_std::channel;
 
-    pub struct Sender<T>(sync::Sender<T>);
+    pub struct Sender<T>(channel::Sender<T>);
 
     impl<T> Sender<T> {
         #[must_use]
         pub fn send_blocking(&self, item: T) -> bool {
-            async_std::task::block_on(async {
-                self.0.send(item).await;
-                true
-            })
+            async_std::task::block_on(async { self.0.send(item).await.is_ok() })
         }
     }
 
     /// Receiving end of channel.
-    pub type Receiver<T> = sync::Receiver<T>;
+    pub type Receiver<T> = channel::Receiver<T>;
 
     pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
-        let (s, r) = sync::channel(1);
+        let (s, r) = channel::bounded(1);
         (Sender(s), r)
     }
 }

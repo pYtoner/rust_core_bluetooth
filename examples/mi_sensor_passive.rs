@@ -85,7 +85,7 @@ impl App {
         }
     }
 
-    #[cfg(not(feature = "async_std_unstable"))]
+    #[cfg(not(feature = "async_std"))]
     fn run(mut self) {
         debug!("Running in std");
         while let Ok(event) = self.receiver.recv() {
@@ -93,11 +93,11 @@ impl App {
         }
     }
 
-    #[cfg(feature = "async_std_unstable")]
+    #[cfg(feature = "async_std")]
     fn run(mut self) {
         debug!("Running in async_std");
         async_std::task::block_on(async move {
-            while let Some(event) = self.receiver.recv().await {
+            while let Ok(event) = self.receiver.recv().await {
                 self.handle_event(event);
             }
         })

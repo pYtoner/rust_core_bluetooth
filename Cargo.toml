@@ -12,10 +12,10 @@ edition = "2018"
 license = "MIT/Apache-2.0"
 
 [features]
-async_std_unstable = ["async-std"]
+async_std = ["async-std"]
 
 [dependencies]
-async-std = { version = "1.5.0", features = ["unstable"], optional = true }
+async-std = { version = "1.12", optional = true }
 enumflags2 = "0.7"
 lazy_static = "1.4"
 log = "0.4"

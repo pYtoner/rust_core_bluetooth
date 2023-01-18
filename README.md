@@ -12,6 +12,6 @@ See example in the [crate docs](https://docs.rs/core_bluetooth/#example) and als
 
 ## Crate Features
 
-By default MPSC rendezvous channel from `std` is used to perform native framework calls. With `async_std_unstable` 
+By default MPSC rendezvous channel from `std` is used to perform native framework calls. With `async_std` 
 feature chis channel can be replaced with `async_std::sync::channel` making it possible to pump events in async context.
 Note the `async_std` will need `unstable` feature enabled.

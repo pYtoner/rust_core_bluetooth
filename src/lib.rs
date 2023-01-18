@@ -67,18 +67,24 @@
 //!         _ => {}
 //!     }
 //! };
-#![cfg_attr(not(feature = "async_std_unstable"), doc =r#"
+#![cfg_attr(
+    not(feature = "async_std"),
+    doc = r#"
 while let Ok(event) = receiver.recv() {
     handle_event(event);
 }
-"#)]
-#![cfg_attr(feature = "async_std_unstable", doc =r#"
+"#
+)]
+#![cfg_attr(
+    feature = "async_std",
+    doc = r#"
 async_std::task::block_on(async move {
     while let Some(event) = receiver.recv().await {
         handle_event(event);
     }
 })
-"#)]
+"#
+)]
 //! ```
 //!
 //! You can find more examples in the `examples` directory.
@@ -94,8 +100,8 @@ pub mod central;
 pub mod error;
 mod platform;
 mod sync;
-pub mod uuid;
 mod util;
+pub mod uuid;
 
 use static_assertions::*;
 
