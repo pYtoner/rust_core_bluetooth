@@ -1,25 +1,25 @@
+pub mod characteristic;
 mod command;
 mod delegate;
-pub mod characteristic;
 pub mod descriptor;
 pub mod peripheral;
 pub mod service;
 
-use objc::*;
 use objc::runtime::*;
+use objc::*;
 use static_assertions::*;
-use std::os::raw::*;
-use std::sync::Arc;
+use std::collections::HashMap;
 use std::mem;
+use std::os::raw::*;
 use std::ptr;
 use std::ptr::NonNull;
-use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::*;
 use crate::error::Error;
 use crate::platform::*;
 use crate::sync;
 use crate::uuid::*;
+use crate::*;
 
 use characteristic::Characteristic;
 use delegate::Delegate;
@@ -380,7 +380,10 @@ impl ScanOptions {
             self.service_cbuuids = Some(NSArray::with_capacity(uuids.len()).retain());
         }
         for &uuid in uuids {
-            self.service_cbuuids.as_ref().unwrap().push(CBUUID::from_uuid(uuid));
+            self.service_cbuuids
+                .as_ref()
+                .unwrap()
+                .push(CBUUID::from_uuid(uuid));
         }
         self
     }
@@ -392,16 +395,25 @@ impl ScanOptions {
             self.solicited_service_cbuuids = Some(NSArray::with_capacity(uuids.len()).retain());
         }
         for &uuid in uuids {
-            self.solicited_service_cbuuids.as_ref().unwrap().push(CBUUID::from_uuid(uuid));
+            self.solicited_service_cbuuids
+                .as_ref()
+                .unwrap()
+                .push(CBUUID::from_uuid(uuid));
         }
         self
     }
 
     fn to_options_dict(&self) -> NSDictionary {
         let dict = NSDictionary::with_capacity(2);
-        dict.insert(unsafe { CBCentralManagerScanOptionAllowDuplicatesKey }, NSNumber::new_bool(self.allow_duplicates));
+        dict.insert(
+            unsafe { CBCentralManagerScanOptionAllowDuplicatesKey },
+            NSNumber::new_bool(self.allow_duplicates),
+        );
         if let Some(uuids) = self.solicited_service_cbuuids.as_ref() {
-            dict.insert(unsafe { CBCentralManagerScanOptionSolicitedServiceUUIDsKey }, uuids.as_ptr());
+            dict.insert(
+                unsafe { CBCentralManagerScanOptionSolicitedServiceUUIDsKey },
+                uuids.as_ptr(),
+            );
         }
         dict
     }
@@ -417,7 +429,8 @@ impl Drop for Inner {
     fn drop(&mut self) {
         command::Manager {
             manager: self.manager.clone(),
-        }.drop_self();
+        }
+        .drop_self();
     }
 }
 
@@ -438,9 +451,7 @@ impl CentralManager {
     pub fn new() -> (Self, sync::Receiver<CentralEvent>) {
         objc::rc::autoreleasepool(|| {
             let (manager, recv) = CBCentralManager::new(false);
-            (Self(Arc::new(Inner {
-                manager,
-            })), recv)
+            (Self(Arc::new(Inner { manager })), recv)
         })
     }
 
@@ -486,7 +497,8 @@ impl CentralManager {
             command::Scan {
                 manager: self.0.manager.clone(),
                 options,
-            }.dispatch()
+            }
+            .dispatch()
         })
     }
 
@@ -495,7 +507,8 @@ impl CentralManager {
         objc::rc::autoreleasepool(|| {
             command::Manager {
                 manager: self.0.manager.clone(),
-            }.cancel_scan();
+            }
+            .cancel_scan();
         })
     }
 
@@ -514,7 +527,8 @@ impl CentralManager {
             command::Connect {
                 manager: self.0.manager.clone(),
                 peripheral: peripheral.peripheral.clone(),
-            }.dispatch()
+            }
+            .dispatch()
         })
     }
 
@@ -531,7 +545,8 @@ impl CentralManager {
             command::CancelConnect {
                 manager: self.0.manager.clone(),
                 peripheral: peripheral.peripheral.clone(),
-            }.cancel_connect()
+            }
+            .cancel_connect()
         })
     }
 
@@ -542,7 +557,8 @@ impl CentralManager {
                 manager: self.0.manager.clone(),
                 uuids,
                 tag,
-            }.get_peripherals()
+            }
+            .get_peripherals()
         })
     }
 
@@ -553,7 +569,8 @@ impl CentralManager {
                 manager: self.0.manager.clone(),
                 uuids,
                 tag,
-            }.get_peripherals_with_services()
+            }
+            .get_peripherals_with_services()
         })
     }
 }
@@ -570,7 +587,10 @@ impl CBCentralManager {
             let delegate = Delegate::new(sender, queue);
 
             let options = NSDictionary::with_capacity(1);
-            options.insert(CBCentralManagerOptionShowPowerAlertKey, NSNumber::new_bool(show_power_alert));
+            options.insert(
+                CBCentralManagerOptionShowPowerAlertKey,
+                NSNumber::new_bool(show_power_alert),
+            );
 
             let mut r: *mut Object = msg_send![class!(CBCentralManager), alloc];
             r = msg_send![r.as_ptr(), initWithDelegate:delegate queue:queue options:options];
@@ -594,8 +614,7 @@ impl CBCentralManager {
     fn state(&self) -> ManagerState {
         unsafe {
             let r: c_int = msg_send![self.as_ptr(), state];
-            ManagerState::from_u8(r as u8)
-                .unwrap_or(ManagerState::Unknown)
+            ManagerState::from_u8(r as u8).unwrap_or(ManagerState::Unknown)
         }
     }
 
@@ -603,7 +622,8 @@ impl CBCentralManager {
         let services = options.service_cbuuids.as_ptr();
         let options = options.to_options_dict();
         unsafe {
-            let _: () = msg_send![self.as_ptr(), scanForPeripheralsWithServices:services options:options];
+            let _: () =
+                msg_send![self.as_ptr(), scanForPeripheralsWithServices:services options:options];
         }
     }
 
@@ -627,24 +647,33 @@ impl CBCentralManager {
 
     fn get_peripherals(&self, uuids: NSArray /* of NSUUID */) -> Option<Vec<Peripheral>> {
         let r = unsafe {
-            let r: *mut Object = msg_send![self.as_ptr(), retrievePeripheralsWithIdentifiers:uuids.as_ptr()];
+            let r: *mut Object =
+                msg_send![self.as_ptr(), retrievePeripheralsWithIdentifiers:uuids.as_ptr()];
             NSArray::wrap_nullable(r)
         };
-        r.map(|r| r.iter()
-            .map(|v| unsafe { Peripheral::retain(v) })
-            .inspect(|v| v.peripheral.set_delegate(self.delegate()))
-            .collect())
+        r.map(|r| {
+            r.iter()
+                .map(|v| unsafe { Peripheral::retain(v) })
+                .inspect(|v| v.peripheral.set_delegate(self.delegate()))
+                .collect()
+        })
     }
 
-    fn get_peripherals_with_services(&self, uuids: NSArray /* of CBUUID */) -> Option<Vec<Peripheral>> {
+    fn get_peripherals_with_services(
+        &self,
+        uuids: NSArray, /* of CBUUID */
+    ) -> Option<Vec<Peripheral>> {
         let r = unsafe {
-            let r: *mut Object = msg_send![self.as_ptr(), retrieveConnectedPeripheralsWithServices:uuids.as_ptr()];
+            let r: *mut Object =
+                msg_send![self.as_ptr(), retrieveConnectedPeripheralsWithServices:uuids.as_ptr()];
             NSArray::wrap_nullable(r)
         };
-        r.map(|r| r.iter()
-            .map(|v| unsafe { Peripheral::retain(v) })
-            .inspect(|v| v.peripheral.set_delegate(self.delegate()))
-            .collect())
+        r.map(|r| {
+            r.iter()
+                .map(|v| unsafe { Peripheral::retain(v) })
+                .inspect(|v| v.peripheral.set_delegate(self.delegate()))
+                .collect()
+        })
     }
 }
 
@@ -664,15 +693,22 @@ pub struct AdvertisementData {
 assert_impl_all!(AdvertisementData: Send, Sync);
 
 impl AdvertisementData {
-    pub(in crate) fn from_dict(dict: NSDictionary) -> Self {
-        let connectable = dict.get(unsafe { CBAdvertisementDataIsConnectable })
-            .map(|r| unsafe { NSNumber::wrap(r) }.get_bool() );
-        let local_name = dict.get(unsafe { CBAdvertisementDataLocalNameKey })
-            .map(|r| unsafe { NSString::wrap(r) }.as_str().to_owned() );
-        let manufacturer_data = dict.get(unsafe { CBAdvertisementDataManufacturerDataKey })
-            .map(|r| { unsafe { NSData::wrap(r) }; unsafe { NSData::wrap(r) }.as_bytes().to_owned() });
-        let service_data = dict.get(unsafe { CBAdvertisementDataServiceDataKey })
-            .map(|r| ServiceData::from_dict(unsafe { NSDictionary::wrap(r) } ))
+    pub(crate) fn from_dict(dict: NSDictionary) -> Self {
+        let connectable = dict
+            .get(unsafe { CBAdvertisementDataIsConnectable })
+            .map(|r| unsafe { NSNumber::wrap(r) }.get_bool());
+        let local_name = dict
+            .get(unsafe { CBAdvertisementDataLocalNameKey })
+            .map(|r| unsafe { NSString::wrap(r) }.as_str().to_owned());
+        let manufacturer_data = dict
+            .get(unsafe { CBAdvertisementDataManufacturerDataKey })
+            .map(|r| {
+                unsafe { NSData::wrap(r) };
+                unsafe { NSData::wrap(r) }.as_bytes().to_owned()
+            });
+        let service_data = dict
+            .get(unsafe { CBAdvertisementDataServiceDataKey })
+            .map(|r| ServiceData::from_dict(unsafe { NSDictionary::wrap(r) }))
             .unwrap_or(ServiceData::new());
         let get_uuids = |key| {
             dict.get(key)
@@ -685,10 +721,13 @@ impl AdvertisementData {
                 .unwrap_or(Vec::new())
         };
         let service_uuids = get_uuids(unsafe { CBAdvertisementDataServiceUUIDsKey });
-        let overflow_service_uuids = get_uuids(unsafe { CBAdvertisementDataOverflowServiceUUIDsKey });
-        let solicited_service_uuids = get_uuids(unsafe { CBAdvertisementDataSolicitedServiceUUIDsKey });
-        let tx_power_level = dict.get(unsafe { CBAdvertisementDataTxPowerLevelKey })
-            .map(|r| unsafe { NSNumber::wrap(r) }.get_i32() );
+        let overflow_service_uuids =
+            get_uuids(unsafe { CBAdvertisementDataOverflowServiceUUIDsKey });
+        let solicited_service_uuids =
+            get_uuids(unsafe { CBAdvertisementDataSolicitedServiceUUIDsKey });
+        let tx_power_level = dict
+            .get(unsafe { CBAdvertisementDataTxPowerLevelKey })
+            .map(|r| unsafe { NSNumber::wrap(r) }.get_i32());
         Self {
             connectable,
             local_name,
@@ -751,31 +790,36 @@ pub struct ServiceData(HashMap<Uuid, Vec<u8>>);
 assert_impl_all!(ServiceData: Send, Sync);
 
 impl ServiceData {
-    pub(in crate) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(Default::default())
     }
 
-    pub(in crate) fn from_dict(dict: NSDictionary) -> Self {
-        Self(dict.iter()
-            .map(|(k, v)| (
-                unsafe { CBUUID::wrap(k) }.to_uuid(),
-                unsafe { NSData::wrap(v) }.as_bytes().to_owned()))
-            .collect())
+    pub(crate) fn from_dict(dict: NSDictionary) -> Self {
+        Self(
+            dict.iter()
+                .map(|(k, v)| {
+                    (
+                        unsafe { CBUUID::wrap(k) }.to_uuid(),
+                        unsafe { NSData::wrap(v) }.as_bytes().to_owned(),
+                    )
+                })
+                .collect(),
+        )
     }
 
     pub fn get(&self, uuid: Uuid) -> Option<&[u8]> {
         self.0.get(&uuid).map(|v| v.as_slice())
     }
 
-    pub fn keys<'a>(&'a self) -> impl Iterator<Item=Uuid> + 'a {
+    pub fn keys<'a>(&'a self) -> impl Iterator<Item = Uuid> + 'a {
         self.0.keys().copied()
     }
 
-    pub fn values<'a>(&'a self) -> impl Iterator<Item=&[u8]> + 'a {
+    pub fn values<'a>(&'a self) -> impl Iterator<Item = &[u8]> + 'a {
         self.0.values().map(|v| v.as_slice())
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item=(Uuid, &[u8])> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Uuid, &[u8])> + 'a {
         self.0.iter().map(|(k, v)| (*k, v.as_slice()))
     }
 }

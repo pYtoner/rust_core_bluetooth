@@ -2,7 +2,7 @@ macro_rules! object_ptr_wrapper {
     ($n:ident) => {
         #[derive(Clone, Copy, Debug)]
         #[repr(transparent)]
-        pub(in crate) struct $n(::std::ptr::NonNull<::objc::runtime::Object>);
+        pub(crate) struct $n(::std::ptr::NonNull<::objc::runtime::Object>);
 
         impl $n {
             #[allow(dead_code)]

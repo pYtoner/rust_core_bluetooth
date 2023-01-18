@@ -1,5 +1,5 @@
-use objc::*;
 use objc::runtime::*;
+use objc::*;
 use std::ffi::CStr;
 use std::os::raw::*;
 use std::ptr::{self, NonNull};
@@ -15,20 +15,20 @@ pub type NSUInteger = usize;
 #[link(name = "AppKit", kind = "framework")]
 #[link(name = "Foundation", kind = "framework")]
 #[link(name = "CoreBluetooth", kind = "framework")]
-extern {
-    pub(in crate) static CBAdvertisementDataIsConnectable: NSString;
-    pub(in crate) static CBAdvertisementDataLocalNameKey: NSString;
-    pub(in crate) static CBAdvertisementDataManufacturerDataKey: NSString;
-    pub(in crate) static CBAdvertisementDataOverflowServiceUUIDsKey: NSString;
-    pub(in crate) static CBAdvertisementDataServiceDataKey: NSString;
-    pub(in crate) static CBAdvertisementDataServiceUUIDsKey: NSString;
-    pub(in crate) static CBAdvertisementDataSolicitedServiceUUIDsKey: NSString;
-    pub(in crate) static CBAdvertisementDataTxPowerLevelKey: NSString;
-    pub(in crate) static CBCentralManagerScanOptionAllowDuplicatesKey: NSString;
-    pub(in crate) static CBCentralManagerScanOptionSolicitedServiceUUIDsKey: NSString;
-    pub(in crate) static CBCentralManagerOptionShowPowerAlertKey: NSString;
-    pub(in crate) static CBErrorDomain: NSString;
-    pub(in crate) static CBATTErrorDomain: NSString;
+extern "C" {
+    pub(crate) static CBAdvertisementDataIsConnectable: NSString;
+    pub(crate) static CBAdvertisementDataLocalNameKey: NSString;
+    pub(crate) static CBAdvertisementDataManufacturerDataKey: NSString;
+    pub(crate) static CBAdvertisementDataOverflowServiceUUIDsKey: NSString;
+    pub(crate) static CBAdvertisementDataServiceDataKey: NSString;
+    pub(crate) static CBAdvertisementDataServiceUUIDsKey: NSString;
+    pub(crate) static CBAdvertisementDataSolicitedServiceUUIDsKey: NSString;
+    pub(crate) static CBAdvertisementDataTxPowerLevelKey: NSString;
+    pub(crate) static CBCentralManagerScanOptionAllowDuplicatesKey: NSString;
+    pub(crate) static CBCentralManagerScanOptionSolicitedServiceUUIDsKey: NSString;
+    pub(crate) static CBCentralManagerOptionShowPowerAlertKey: NSString;
+    pub(crate) static CBErrorDomain: NSString;
+    pub(crate) static CBATTErrorDomain: NSString;
 }
 
 pub trait ObjectPtr {
@@ -42,11 +42,18 @@ pub trait ObjectPtr {
     }
 
     unsafe fn ivar(&self, name: &str) -> *mut c_void {
-        *self.as_ptr().as_ref().unwrap().get_ivar::<*mut c_void>(name)
+        *self
+            .as_ptr()
+            .as_ref()
+            .unwrap()
+            .get_ivar::<*mut c_void>(name)
     }
 
     unsafe fn ivar_mut(&mut self, name: &str) -> &mut *mut c_void {
-        self.as_ptr().as_mut().unwrap().get_mut_ivar::<*mut c_void>(name)
+        self.as_ptr()
+            .as_mut()
+            .unwrap()
+            .get_mut_ivar::<*mut c_void>(name)
     }
 
     fn as_ptr(&self) -> *mut Object;
@@ -101,14 +108,18 @@ impl<T: ObjectPtr> std::ops::Deref for StrongPtr<T> {
 
 impl<T: ObjectPtr + Clone> Clone for StrongPtr<T> {
     fn clone(&self) -> Self {
-        unsafe { objc_retain(self.as_ptr()); }
+        unsafe {
+            objc_retain(self.as_ptr());
+        }
         Self(self.0.clone())
     }
 }
 
 impl<T: ObjectPtr> Drop for StrongPtr<T> {
     fn drop(&mut self) {
-        unsafe { objc_release(self.as_ptr()); }
+        unsafe {
+            objc_release(self.as_ptr());
+        }
     }
 }
 
@@ -125,7 +136,7 @@ impl<T: ObjectPtr> ObjectPtr for StrongPtr<T> {
 }
 
 #[allow(non_camel_case_types)]
-pub type dispatch_function_t = extern fn(*mut c_void);
+pub type dispatch_function_t = extern "C" fn(*mut c_void);
 
 pub const DISPATCH_QUEUE_SERIAL: *mut Object = ptr::null_mut();
 
@@ -139,7 +150,7 @@ object_ptr_wrapper!(NSNumber);
 impl NSNumber {
     pub fn new_bool(value: bool) -> Self {
         unsafe {
-            let r: *mut Object = msg_send![class!(NSNumber), numberWithBool:value];
+            let r: *mut Object = msg_send![class!(NSNumber), numberWithBool: value];
             Self::wrap(r)
         }
     }
@@ -171,7 +182,7 @@ impl NSString {
 
     pub fn is_equal_to_string(&self, s: NSString) -> bool {
         unsafe {
-            let r: bool = msg_send![self.as_ptr(), isEqualToString:s];
+            let r: bool = msg_send![self.as_ptr(), isEqualToString: s];
             r
         }
     }
@@ -206,14 +217,15 @@ object_ptr_wrapper!(NSArray);
 impl NSArray {
     pub fn with_capacity(capacity: NSUInteger) -> Self {
         unsafe {
-            let r: *mut Object = msg_send![class!(NSMutableArray), arrayWithCapacity:capacity];
+            let r: *mut Object = msg_send![class!(NSMutableArray), arrayWithCapacity: capacity];
             Self::wrap(r)
         }
     }
 
     pub fn from_iter<T, I>(iter: I) -> Self
-    where T: ObjectPtr,
-          I: Iterator<Item=T>
+    where
+        T: ObjectPtr,
+        I: Iterator<Item = T>,
     {
         let r = NSArray::with_capacity(iter.size_hint().0);
         for v in iter {
@@ -224,7 +236,7 @@ impl NSArray {
 
     pub fn push(&self, obj: impl ObjectPtr) {
         unsafe {
-            let _: () = msg_send![self.as_ptr(), addObject:obj];
+            let _: () = msg_send![self.as_ptr(), addObject: obj];
         }
     }
 
@@ -246,7 +258,10 @@ object_ptr_wrapper!(NSDictionary);
 impl NSDictionary {
     pub fn with_capacity(capacity: NSUInteger) -> Self {
         unsafe {
-            let r: *mut Object = msg_send![class!(NSMutableDictionary), dictionaryWithCapacity:capacity];
+            let r: *mut Object = msg_send![
+                class!(NSMutableDictionary),
+                dictionaryWithCapacity: capacity
+            ];
             Self::wrap(r)
         }
     }
@@ -277,9 +292,7 @@ impl NSDictionary {
     }
 
     pub fn iter(&self) -> NSDictionaryIter {
-        NSDictionaryIter {
-            keys: self.keys(),
-        }
+        NSDictionaryIter { keys: self.keys() }
     }
 }
 
@@ -326,7 +339,8 @@ impl<T: ObjectPtr> Iterator for NSEnumerator<'_, T> {
     }
 
     fn count(self) -> usize
-        where Self: Sized
+    where
+        Self: Sized,
     {
         self.size_hint().0
     }
@@ -356,6 +370,3 @@ impl NSError {
         }
     }
 }
-
-
-

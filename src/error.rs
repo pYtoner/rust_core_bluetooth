@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::platform::*;
 
-pub(in crate) fn result<T, F: FnOnce() -> T>(error: Option<NSError>, ok: F) -> Result<T, Error> {
+pub(crate) fn result<T, F: FnOnce() -> T>(error: Option<NSError>, ok: F) -> Result<T, Error> {
     if let Some(error) = error.map(Error::from_ns_error) {
         Err(error)
     } else {
@@ -17,7 +17,7 @@ pub struct Error {
 }
 
 impl Error {
-    pub(in crate) fn from_ns_error(err: NSError) -> Self {
+    pub(crate) fn from_ns_error(err: NSError) -> Self {
         let domain = err.domain();
         let code = err.code();
         let kind = if domain.is_equal_to_string(unsafe { CBErrorDomain }) {
@@ -28,10 +28,7 @@ impl Error {
             ErrorKind::Other
         };
         let description = err.description().as_str().to_owned();
-        Self {
-            kind,
-            description,
-        }
+        Self { kind, description }
     }
 
     pub fn kind(&self) -> ErrorKind {

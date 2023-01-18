@@ -1,7 +1,7 @@
-use super::*;
 use super::characteristic::{CBCharacteristic, WriteKind};
 use super::descriptor::CBDescriptor;
 use super::service::CBService;
+use super::*;
 
 macro_rules! impl_via_manager {
     ($ctx_ty:ident => $($n:ident ( $ctx:ident ) $code:expr)*) => {
@@ -45,7 +45,7 @@ macro_rules! impl_via_peripheral {
     };
 }
 
-pub trait Command: 'static + Sized + Send  {
+pub trait Command: 'static + Sized + Send {
     fn into_ctx(self) -> *mut c_void {
         Box::into_raw(Box::new(self)) as *mut c_void
     }
@@ -61,7 +61,7 @@ pub trait Command: 'static + Sized + Send  {
 
 #[repr(transparent)]
 pub struct Manager {
-    pub(in super) manager: StrongPtr<CBCentralManager>,
+    pub(super) manager: StrongPtr<CBCentralManager>,
 }
 
 impl Command for Manager {
@@ -86,9 +86,9 @@ impl_via_manager! { Manager =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct GetPeripherals {
-    pub(in super) manager: StrongPtr<CBCentralManager>,
-    pub(in super) uuids: StrongPtr<NSArray>,
-    pub(in super) tag: Option<Tag>,
+    pub(super) manager: StrongPtr<CBCentralManager>,
+    pub(super) uuids: StrongPtr<NSArray>,
+    pub(super) tag: Option<Tag>,
 }
 
 impl Command for GetPeripherals {}
@@ -113,8 +113,8 @@ impl_via_manager! { GetPeripherals =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct CancelConnect {
-    pub(in super) manager: StrongPtr<CBCentralManager>,
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) manager: StrongPtr<CBCentralManager>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
 }
 
 impl Command for CancelConnect {}
@@ -128,8 +128,8 @@ impl_via_manager! { CancelConnect =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct Scan {
-    pub(in super) manager: StrongPtr<CBCentralManager>,
-    pub(in super) options: ScanOptions,
+    pub(super) manager: StrongPtr<CBCentralManager>,
+    pub(super) options: ScanOptions,
 }
 
 impl Command for Scan {}
@@ -143,8 +143,8 @@ impl_via_manager! { Scan =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct Connect {
-    pub(in super) manager: StrongPtr<CBCentralManager>,
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) manager: StrongPtr<CBCentralManager>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
 }
 
 impl Command for Connect {}
@@ -158,8 +158,8 @@ impl_via_manager! { Connect =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct DiscoverServices {
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
-    pub(in super) uuids: Option<StrongPtr<NSArray>>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) uuids: Option<StrongPtr<NSArray>>,
 }
 
 impl Command for DiscoverServices {}
@@ -173,9 +173,9 @@ impl_via_peripheral! { DiscoverServices =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct PeripheralServiceUuids {
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
-    pub(in super) service: StrongPtr<CBService>,
-    pub(in super) uuids: Option<StrongPtr<NSArray>>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) service: StrongPtr<CBService>,
+    pub(super) uuids: Option<StrongPtr<NSArray>>,
 }
 
 impl Command for PeripheralServiceUuids {}
@@ -192,7 +192,7 @@ impl_via_peripheral! { PeripheralServiceUuids =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct Peripheral {
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
 }
 
 impl Command for Peripheral {
@@ -214,8 +214,8 @@ impl_via_peripheral! { Peripheral =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct PeripheralTag {
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
-    pub(in super) tag: Option<Tag>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) tag: Option<Tag>,
 }
 
 impl Command for PeripheralTag {}
@@ -238,8 +238,8 @@ impl_via_peripheral! { PeripheralTag =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct Characteristic {
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
-    pub(in super) characteristic: StrongPtr<CBCharacteristic>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) characteristic: StrongPtr<CBCharacteristic>,
 }
 
 impl Command for Characteristic {}
@@ -262,10 +262,10 @@ impl_via_peripheral! { Characteristic =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct WriteCharacteristic {
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
-    pub(in super) characteristic: StrongPtr<CBCharacteristic>,
-    pub(in super) value: StrongPtr<NSData>,
-    pub(in super) kind: WriteKind,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) characteristic: StrongPtr<CBCharacteristic>,
+    pub(super) value: StrongPtr<NSData>,
+    pub(super) kind: WriteKind,
 }
 
 impl Command for WriteCharacteristic {}
@@ -279,8 +279,8 @@ impl_via_peripheral! { WriteCharacteristic =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct Descriptor {
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
-    pub(in super) descriptor: StrongPtr<CBDescriptor>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) descriptor: StrongPtr<CBDescriptor>,
 }
 
 impl Command for Descriptor {}
@@ -294,9 +294,9 @@ impl_via_peripheral! { Descriptor =>
 ///////////////////////////////////////////////////////////////////////////////////
 
 pub struct WriteDescriptor {
-    pub(in super) peripheral: StrongPtr<CBPeripheral>,
-    pub(in super) descriptor: StrongPtr<CBDescriptor>,
-    pub(in super) value: StrongPtr<NSData>,
+    pub(super) peripheral: StrongPtr<CBPeripheral>,
+    pub(super) descriptor: StrongPtr<CBDescriptor>,
+    pub(super) value: StrongPtr<NSData>,
 }
 
 impl Command for WriteDescriptor {}

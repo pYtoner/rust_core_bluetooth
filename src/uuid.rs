@@ -1,5 +1,5 @@
-use objc::*;
 use objc::runtime::*;
+use objc::*;
 use static_assertions::assert_impl_all;
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -7,7 +7,9 @@ use std::ops::{Deref, DerefMut};
 use crate::platform::*;
 use std::str::FromStr;
 
-const BASE_UUID_BYTES: [u8; 16] = [0, 0, 0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0x80, 0x5F, 0x9B, 0x34, 0xFB];
+const BASE_UUID_BYTES: [u8; 16] = [
+    0, 0, 0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0x80, 0x5F, 0x9B, 0x34, 0xFB,
+];
 
 /// Bluetooth-tailored UUID.
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -56,7 +58,10 @@ impl Uuid {
                 r.copy_from_slice(bytes);
                 r
             }
-            _ => panic!("invalid slice len {}, expected 2, 4 or 16 bytes", bytes.len()),
+            _ => panic!(
+                "invalid slice len {}, expected 2, 4 or 16 bytes",
+                bytes.len()
+            ),
         })
     }
 
@@ -163,9 +168,18 @@ impl FromStr for Uuid {
 
         let mut buf = [0; 16];
         decode(&s[..PARTS[0].0], &mut buf[..PARTS[0].1])?;
-        decode(&s[PARTS[0].0 + 1..PARTS[1].0], &mut buf[PARTS[0].1..PARTS[1].1])?;
-        decode(&s[PARTS[1].0 + 1..PARTS[2].0], &mut buf[PARTS[1].1..PARTS[2].1])?;
-        decode(&s[PARTS[2].0 + 1..PARTS[3].0], &mut buf[PARTS[2].1..PARTS[3].1])?;
+        decode(
+            &s[PARTS[0].0 + 1..PARTS[1].0],
+            &mut buf[PARTS[0].1..PARTS[1].1],
+        )?;
+        decode(
+            &s[PARTS[1].0 + 1..PARTS[2].0],
+            &mut buf[PARTS[1].1..PARTS[2].1],
+        )?;
+        decode(
+            &s[PARTS[2].0 + 1..PARTS[3].0],
+            &mut buf[PARTS[2].1..PARTS[3].1],
+        )?;
         decode(&s[PARTS[3].0 + 1..], &mut buf[PARTS[3].1..])?;
         Ok(buf.into())
     }
@@ -208,7 +222,7 @@ impl CBUUID {
     pub fn from_uuid(uuid: Uuid) -> Self {
         unsafe {
             let data = NSData::from_bytes(uuid.shorten());
-            let r: *mut Object = msg_send![class!(CBUUID), UUIDWithData:data];
+            let r: *mut Object = msg_send![class!(CBUUID), UUIDWithData: data];
             Self::wrap(r)
         }
     }
@@ -242,8 +256,14 @@ mod test {
             (base(&[0, 0, 0, 1]), &[0, 1][..]),
             (base(&[0, 0, 0xff, 0xff]), &[0xff, 0xff][..]),
             (base(&[0, 1, 0, 0]), &[0, 1, 0, 0][..]),
-            (base(&[0xff, 0xff, 0xff, 0xff]), &[0xff, 0xff, 0xff, 0xff][..]),
-            (base(&[0xff, 0xff, 0xff, 0xff]), &[0xff, 0xff, 0xff, 0xff][..]),
+            (
+                base(&[0xff, 0xff, 0xff, 0xff]),
+                &[0xff, 0xff, 0xff, 0xff][..],
+            ),
+            (
+                base(&[0xff, 0xff, 0xff, 0xff]),
+                &[0xff, 0xff, 0xff, 0xff][..],
+            ),
             (base(&[0, 0, 0, 0, 1]), &base(&[0, 0, 0, 0, 1])[..]),
         ];
         for &(inp, exp) in data {
@@ -255,9 +275,13 @@ mod test {
     fn parse_ok() {
         let data = &[
             ("00000000-0000-0000-0000-000000000000", Uuid::zeroed()),
-            ("12345678-9AbC-Def0-1234-56789aBCDEF0", Uuid::from_bytes(
-                [0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
-                    0xDE, 0xF0])),
+            (
+                "12345678-9AbC-Def0-1234-56789aBCDEF0",
+                Uuid::from_bytes([
+                    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34, 0x56, 0x78, 0x9A,
+                    0xBC, 0xDE, 0xF0,
+                ]),
+            ),
             ("00000000-0000-1000-8000-00805F9B34FB", Uuid::base()),
         ];
         for &(inp, exp) in data {

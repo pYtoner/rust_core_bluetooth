@@ -1,15 +1,15 @@
-use objc::*;
 use objc::runtime::Object;
+use objc::*;
 use static_assertions::assert_impl_all;
 use std::ptr::NonNull;
 
-use crate::*;
 use crate::platform::*;
 use crate::uuid::*;
+use crate::*;
 
+use super::characteristic::*;
 use super::command;
 use super::delegate::Delegate;
-use super::characteristic::*;
 use super::descriptor::*;
 use super::service::*;
 
@@ -17,8 +17,8 @@ use super::service::*;
 /// [`get_max_write_len`](struct.Peripheral.html#method.get_max_write_len) method.
 #[derive(Clone, Copy, Debug)]
 pub struct MaxWriteLen {
-    pub(in crate) with_response: usize,
-    pub(in crate) without_response: usize,
+    pub(crate) with_response: usize,
+    pub(crate) without_response: usize,
 }
 
 assert_impl_all!(MaxWriteLen: Send);
@@ -55,13 +55,13 @@ impl MaxWriteLen {
 #[derive(Clone, Debug)]
 pub struct Peripheral {
     id: Uuid,
-    pub(in crate) peripheral: StrongPtr<CBPeripheral>,
+    pub(crate) peripheral: StrongPtr<CBPeripheral>,
 }
 
 assert_impl_all!(Peripheral: Send, Sync);
 
 impl Peripheral {
-    pub(in crate) unsafe fn retain(o: impl ObjectPtr) -> Self {
+    pub(crate) unsafe fn retain(o: impl ObjectPtr) -> Self {
         let peripheral = CBPeripheral::wrap(o).retain();
         Self {
             id: peripheral.id(),
@@ -150,8 +150,7 @@ impl Peripheral {
     /// [`unsubscribe`](struct.Peripheral.html#method.unsubscribe) method.
     pub fn subscribe(&self, characteristic: &Characteristic) {
         objc::rc::autoreleasepool(|| {
-            self.characteristic_cmd(characteristic)
-                .subscribe();
+            self.characteristic_cmd(characteristic).subscribe();
         })
     }
 
@@ -159,8 +158,7 @@ impl Peripheral {
     /// [`subscribe`](struct.Peripheral.html#method.subscribe) method.
     pub fn unsubscribe(&self, characteristic: &Characteristic) {
         objc::rc::autoreleasepool(|| {
-            self.characteristic_cmd(characteristic)
-                .unsubscribe();
+            self.characteristic_cmd(characteristic).unsubscribe();
         })
     }
 
@@ -174,8 +172,7 @@ impl Peripheral {
     /// object.
     pub fn read_characteristic(&self, characteristic: &Characteristic) {
         objc::rc::autoreleasepool(|| {
-            self.characteristic_cmd(characteristic)
-                .read();
+            self.characteristic_cmd(characteristic).read();
         })
     }
 
@@ -194,14 +191,20 @@ impl Peripheral {
     /// Examine [`can_write`](../characteristic/struct.Properties.html#method.can_write) and
     /// [`can_write_without_response`](../characteristic/struct.Properties.html#method.can_write_without_response)
     /// properties to determine which kinds of writes you can perform.
-    pub fn write_characteristic(&self, characteristic: &Characteristic, value: &[u8], kind: WriteKind) {
+    pub fn write_characteristic(
+        &self,
+        characteristic: &Characteristic,
+        value: &[u8],
+        kind: WriteKind,
+    ) {
         objc::rc::autoreleasepool(|| {
             command::WriteCharacteristic {
                 peripheral: self.peripheral.clone(),
                 characteristic: characteristic.characteristic.clone(),
                 value: NSData::from_bytes(value).retain(),
                 kind,
-            }.dispatch();
+            }
+            .dispatch();
         })
     }
 
@@ -214,7 +217,8 @@ impl Peripheral {
             command::Descriptor {
                 peripheral: self.peripheral.clone(),
                 descriptor: descriptor.descriptor.clone(),
-            }.read();
+            }
+            .read();
         })
     }
 
@@ -228,7 +232,8 @@ impl Peripheral {
                 peripheral: self.peripheral.clone(),
                 descriptor: descriptor.descriptor.clone(),
                 value: NSData::from_bytes(value).retain(),
-            }.dispatch();
+            }
+            .dispatch();
         })
     }
 
@@ -240,7 +245,8 @@ impl Peripheral {
         objc::rc::autoreleasepool(|| {
             command::Peripheral {
                 peripheral: self.peripheral.clone(),
-            }.read_rssi();
+            }
+            .read_rssi();
         })
     }
 
@@ -262,7 +268,8 @@ impl Peripheral {
             command::PeripheralTag {
                 peripheral: self.peripheral.clone(),
                 tag,
-            }.get_max_write_len();
+            }
+            .get_max_write_len();
         })
     }
 
@@ -272,7 +279,8 @@ impl Peripheral {
             command::DiscoverServices {
                 peripheral: self.peripheral.clone(),
                 uuids,
-            }.dispatch();
+            }
+            .dispatch();
         })
     }
 
@@ -283,7 +291,8 @@ impl Peripheral {
                 peripheral: self.peripheral.clone(),
                 service: service.service.clone(),
                 uuids,
-            }.discover_included_services();
+            }
+            .discover_included_services();
         })
     }
 
@@ -294,7 +303,8 @@ impl Peripheral {
                 peripheral: self.peripheral.clone(),
                 service: service.service.clone(),
                 uuids,
-            }.discover_characteristics();
+            }
+            .discover_characteristics();
         })
     }
 
@@ -343,7 +353,7 @@ impl CBPeripheral {
 
     pub fn set_delegate(&self, delegate: impl ObjectPtr) {
         unsafe {
-            let _: () = msg_send![self.as_ptr(), setDelegate:delegate];
+            let _: () = msg_send![self.as_ptr(), setDelegate: delegate];
         }
     }
 
@@ -359,10 +369,7 @@ impl CBPeripheral {
             let r: *mut Object = msg_send![self.as_ptr(), services];
             NSArray::wrap_nullable(r)?
         };
-        Some(arr.iter()
-            .map(|v| unsafe { Service::retain(v) })
-            .collect())
-
+        Some(arr.iter().map(|v| unsafe { Service::retain(v) }).collect())
     }
 
     pub fn included_services(&self) -> Option<Vec<Service>> {
@@ -370,10 +377,7 @@ impl CBPeripheral {
             let r: *mut Object = msg_send![self.as_ptr(), includedServices];
             NSArray::wrap_nullable(r)?
         };
-        Some(arr.iter()
-            .map(|v| unsafe { Service::retain(v) })
-            .collect())
-
+        Some(arr.iter().map(|v| unsafe { Service::retain(v) }).collect())
     }
 
     pub fn discover_services(&self, uuids: Option<NSArray>) {
@@ -408,7 +412,8 @@ impl CBPeripheral {
 
     pub fn read_characteristic(&self, characteristic: CBCharacteristic) {
         unsafe {
-            let _: () = msg_send![self.as_ptr(), readValueForCharacteristic:characteristic.as_ptr()];
+            let _: () =
+                msg_send![self.as_ptr(), readValueForCharacteristic:characteristic.as_ptr()];
         }
     }
 
@@ -418,7 +423,12 @@ impl CBPeripheral {
         }
     }
 
-    pub fn write_characteristic(&self, characteristic: CBCharacteristic, value: NSData, kind: WriteKind) {
+    pub fn write_characteristic(
+        &self,
+        characteristic: CBCharacteristic,
+        value: NSData,
+        kind: WriteKind,
+    ) {
         unsafe {
             let ty = kind as NSUInteger;
             let _: () = msg_send![self.as_ptr(), writeValue:value forCharacteristic:characteristic.as_ptr() type:ty];
@@ -427,7 +437,8 @@ impl CBPeripheral {
 
     pub fn write_descriptor(&self, descriptor: CBDescriptor, value: NSData) {
         unsafe {
-            let _: () = msg_send![self.as_ptr(), writeValue:value forDescriptor:descriptor.as_ptr()];
+            let _: () =
+                msg_send![self.as_ptr(), writeValue:value forDescriptor:descriptor.as_ptr()];
         }
     }
 
@@ -440,7 +451,7 @@ impl CBPeripheral {
     pub fn max_write_len(&self, kind: WriteKind) -> usize {
         unsafe {
             let ty = kind as NSUInteger;
-            let r: usize = msg_send![self.as_ptr(), maximumWriteValueLengthForType:ty];
+            let r: usize = msg_send![self.as_ptr(), maximumWriteValueLengthForType: ty];
             r
         }
     }

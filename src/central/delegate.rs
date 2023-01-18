@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
 use log::*;
-use objc::*;
 use objc::declare::ClassDecl;
 use objc::runtime::*;
+use objc::*;
 use std::os::raw::*;
 use std::ptr;
 use std::ptr::NonNull;
@@ -36,9 +36,7 @@ impl Delegate {
     }
 
     pub fn queue(&self) -> *mut Object {
-        unsafe {
-            self.ivar(QUEUE_IVAR) as *mut Object
-        }
+        unsafe { self.ivar(QUEUE_IVAR) as *mut Object }
     }
 
     fn set_queue(&mut self, queue: *mut Object) {
@@ -48,9 +46,7 @@ impl Delegate {
     }
 
     fn sender(&self) -> Option<&Sender> {
-        unsafe {
-            (self.ivar(SENDER_IVAR) as *mut Sender).as_ref()
-        }
+        unsafe { (self.ivar(SENDER_IVAR) as *mut Sender).as_ref() }
     }
 
     fn set_sender(&mut self, sender: Sender) {
@@ -74,7 +70,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn centralManager_didConnectPeripheral(
+    extern "C" fn centralManager_didConnectPeripheral(
         this: &mut Object,
         _: Sel,
         _manager: *mut Object,
@@ -84,33 +80,12 @@ impl Delegate {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
 
-            this.send(CentralEvent::PeripheralConnected {
-                peripheral,
-            });
+            this.send(CentralEvent::PeripheralConnected { peripheral });
         }
     }
 
     #[allow(non_snake_case)]
-    extern fn centralManager_didDisconnectPeripheral_error(
-        this: &mut Object,
-        _: Sel,
-        _manager: *mut Object,
-        peripheral: *mut Object,
-        error: *mut Object,
-    ) {
-        unsafe {
-            let this = Delegate::wrap(this);
-            let peripheral = Peripheral::retain(peripheral);
-            let error = NSError::wrap_nullable(error).map(Error::from_ns_error);
-            this.send(CentralEvent::PeripheralDisconnected {
-                peripheral,
-                error,
-            });
-        }
-    }
-
-    #[allow(non_snake_case)]
-    extern fn centralManager_didFailToConnectPeripheral_error(
+    extern "C" fn centralManager_didDisconnectPeripheral_error(
         this: &mut Object,
         _: Sel,
         _manager: *mut Object,
@@ -121,26 +96,40 @@ impl Delegate {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
             let error = NSError::wrap_nullable(error).map(Error::from_ns_error);
-            this.send(CentralEvent::PeripheralConnectFailed {
-                peripheral,
-                error,
-            });
+            this.send(CentralEvent::PeripheralDisconnected { peripheral, error });
         }
     }
 
     #[allow(non_snake_case)]
-    extern fn centralManager_didDiscoverPeripheral_advertisementData_RSSI(
+    extern "C" fn centralManager_didFailToConnectPeripheral_error(
+        this: &mut Object,
+        _: Sel,
+        _manager: *mut Object,
+        peripheral: *mut Object,
+        error: *mut Object,
+    ) {
+        unsafe {
+            let this = Delegate::wrap(this);
+            let peripheral = Peripheral::retain(peripheral);
+            let error = NSError::wrap_nullable(error).map(Error::from_ns_error);
+            this.send(CentralEvent::PeripheralConnectFailed { peripheral, error });
+        }
+    }
+
+    #[allow(non_snake_case)]
+    extern "C" fn centralManager_didDiscoverPeripheral_advertisementData_RSSI(
         this: &mut Object,
         _: Sel,
         _manager: *mut Object,
         peripheral: *mut Object,
         advertisement_data: *mut Object,
-        rssi: *mut Object)
-    {
+        rssi: *mut Object,
+    ) {
         unsafe {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
-            let advertisement_data = AdvertisementData::from_dict(NSDictionary::wrap(advertisement_data));
+            let advertisement_data =
+                AdvertisementData::from_dict(NSDictionary::wrap(advertisement_data));
             let rssi = NSNumber::wrap(rssi).get_i32();
 
             peripheral.peripheral.set_delegate(this);
@@ -154,7 +143,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn centralManagerDidUpdateState(this: &mut Object, _: Sel, manager: *mut Object) {
+    extern "C" fn centralManagerDidUpdateState(this: &mut Object, _: Sel, manager: *mut Object) {
         unsafe {
             let this = Delegate::wrap(this);
             let new_state = CBCentralManager::wrap(manager).state();
@@ -164,7 +153,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn centralManager_didUpdateANCSAuthorizationForPeripheral(
+    extern "C" fn centralManager_didUpdateANCSAuthorizationForPeripheral(
         _this: &mut Object,
         _: Sel,
         _manager: *mut Object,
@@ -173,7 +162,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didDiscoverServices(
+    extern "C" fn peripheral_didDiscoverServices(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -182,8 +171,9 @@ impl Delegate {
         unsafe {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
-            let services = result(
-                NSError::wrap_nullable(error), || peripheral.peripheral.services().unwrap());
+            let services = result(NSError::wrap_nullable(error), || {
+                peripheral.peripheral.services().unwrap()
+            });
             this.send(CentralEvent::ServicesDiscovered {
                 peripheral,
                 services,
@@ -192,7 +182,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didDiscoverIncludedServicesForService_error(
+    extern "C" fn peripheral_didDiscoverIncludedServicesForService_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -203,8 +193,9 @@ impl Delegate {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
             let service = Service::retain(service);
-            let included_services = result(
-                NSError::wrap_nullable(error), || peripheral.peripheral.included_services().unwrap());
+            let included_services = result(NSError::wrap_nullable(error), || {
+                peripheral.peripheral.included_services().unwrap()
+            });
             this.send(CentralEvent::IncludedServicesDiscovered {
                 peripheral,
                 service,
@@ -214,7 +205,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didDiscoverCharacteristicsForService_error(
+    extern "C" fn peripheral_didDiscoverCharacteristicsForService_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -225,8 +216,9 @@ impl Delegate {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
             let service = Service::retain(service);
-            let characteristics = result(
-                NSError::wrap_nullable(error), || service.service.characteristics().unwrap());
+            let characteristics = result(NSError::wrap_nullable(error), || {
+                service.service.characteristics().unwrap()
+            });
             this.send(CentralEvent::CharacteristicsDiscovered {
                 peripheral,
                 service,
@@ -236,7 +228,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didDiscoverDescriptorsForCharacteristic_error(
+    extern "C" fn peripheral_didDiscoverDescriptorsForCharacteristic_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -247,8 +239,9 @@ impl Delegate {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
             let characteristic = Characteristic::retain(characteristic);
-            let descriptors = result(
-                NSError::wrap_nullable(error), || characteristic.characteristic.descriptors().unwrap());
+            let descriptors = result(NSError::wrap_nullable(error), || {
+                characteristic.characteristic.descriptors().unwrap()
+            });
             this.send(CentralEvent::DescriptorsDiscovered {
                 peripheral,
                 characteristic,
@@ -258,7 +251,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didUpdateValueForCharacteristic_error(
+    extern "C" fn peripheral_didUpdateValueForCharacteristic_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -269,8 +262,9 @@ impl Delegate {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
             let characteristic = Characteristic::retain(characteristic);
-            let value = result(NSError::wrap_nullable(error),
-                || characteristic.characteristic.value().unwrap());
+            let value = result(NSError::wrap_nullable(error), || {
+                characteristic.characteristic.value().unwrap()
+            });
             this.send(CentralEvent::CharacteristicValue {
                 peripheral,
                 characteristic,
@@ -280,7 +274,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didUpdateValueForDescriptor_error(
+    extern "C" fn peripheral_didUpdateValueForDescriptor_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -291,8 +285,9 @@ impl Delegate {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
             let descriptor = Descriptor::retain(descriptor);
-            let value = result(NSError::wrap_nullable(error),
-                || descriptor.descriptor.value().unwrap());
+            let value = result(NSError::wrap_nullable(error), || {
+                descriptor.descriptor.value().unwrap()
+            });
             this.send(CentralEvent::DescriptorValue {
                 peripheral,
                 descriptor,
@@ -302,7 +297,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didWriteValueForCharacteristic_error(
+    extern "C" fn peripheral_didWriteValueForCharacteristic_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -323,7 +318,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didWriteValueForDescriptor_error(
+    extern "C" fn peripheral_didWriteValueForDescriptor_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -344,7 +339,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheralIsReadyToSendWriteWithoutResponse(
+    extern "C" fn peripheralIsReadyToSendWriteWithoutResponse(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -352,14 +347,12 @@ impl Delegate {
         unsafe {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
-            this.send(CentralEvent::PeripheralIsReadyToWriteWithoutResponse {
-                peripheral,
-            });
+            this.send(CentralEvent::PeripheralIsReadyToWriteWithoutResponse { peripheral });
         }
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didUpdateNotificationStateForCharacteristic_error(
+    extern "C" fn peripheral_didUpdateNotificationStateForCharacteristic_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -380,7 +373,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didReadRSSI_error(
+    extern "C" fn peripheral_didReadRSSI_error(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -390,20 +383,15 @@ impl Delegate {
         unsafe {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
-            let rssi = result(NSError::wrap_nullable(error), || NSNumber::wrap(rssi).get_i32());
-            this.send(CentralEvent::ReadRssiResult {
-                peripheral,
-                rssi,
+            let rssi = result(NSError::wrap_nullable(error), || {
+                NSNumber::wrap(rssi).get_i32()
             });
+            this.send(CentralEvent::ReadRssiResult { peripheral, rssi });
         }
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheralDidUpdateName(
-        this: &mut Object,
-        _: Sel,
-        peripheral: *mut Object,
-    ) {
+    extern "C" fn peripheralDidUpdateName(this: &mut Object, _: Sel, peripheral: *mut Object) {
         unsafe {
             let this = Delegate::wrap(this);
             let peripheral = Peripheral::retain(peripheral);
@@ -416,7 +404,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didModifyServices(
+    extern "C" fn peripheral_didModifyServices(
         this: &mut Object,
         _: Sel,
         peripheral: *mut Object,
@@ -439,7 +427,7 @@ impl Delegate {
     }
 
     #[allow(non_snake_case)]
-    extern fn peripheral_didOpenL2CAPChannel_error(
+    extern "C" fn peripheral_didOpenL2CAPChannel_error(
         _this: &mut Object,
         _: Sel,
         _peripheral: *mut Object,

@@ -9,13 +9,13 @@ use crate::central::characteristic::Characteristic;
 pub struct Service {
     id: Uuid,
     primary: bool,
-    pub(in crate) service: StrongPtr<CBService>,
+    pub(crate) service: StrongPtr<CBService>,
 }
 
 assert_impl_all!(Service: Send, Sync);
 
 impl Service {
-    pub(in crate) unsafe fn retain(o: impl ObjectPtr) -> Self {
+    pub(crate) unsafe fn retain(o: impl ObjectPtr) -> Self {
         let service = CBService::wrap(o).retain();
         Self {
             id: service.id(),
@@ -76,8 +76,10 @@ impl CBService {
             let r: *mut Object = msg_send![self.as_ptr(), characteristics];
             NSArray::wrap_nullable(r)?
         };
-        Some(arr.iter()
-            .map(|v| unsafe { Characteristic::retain(v) })
-            .collect())
+        Some(
+            arr.iter()
+                .map(|v| unsafe { Characteristic::retain(v) })
+                .collect(),
+        )
     }
 }
