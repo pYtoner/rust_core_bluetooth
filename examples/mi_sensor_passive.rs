@@ -325,7 +325,6 @@ fn decrypt_aes_128_ccm(
     // See https://github.com/sfackler/rust-openssl/issues/1237
 
     use openssl_sys::*;
-    use std::convert::TryInto;
     use std::ptr::{null, null_mut};
 
     unsafe {
