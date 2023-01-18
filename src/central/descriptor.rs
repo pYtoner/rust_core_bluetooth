@@ -8,17 +8,17 @@ use super::*;
 /// notifies a client (a central) when the value of the characteristic changes.
 #[derive(Clone, Debug)]
 pub struct Descriptor {
-    id: Uuid,
-    pub(in crate) descriptor: StrongPtr<CBDescriptor>,
+    _id: Uuid,
+    pub(crate) descriptor: StrongPtr<CBDescriptor>,
 }
 
 assert_impl_all!(Descriptor: Send, Sync);
 
 impl Descriptor {
-    pub(in crate) unsafe fn retain(o: impl ObjectPtr) -> Self {
+    pub(crate) unsafe fn retain(o: impl ObjectPtr) -> Self {
         let descriptor = CBDescriptor::wrap(o).retain();
         Self {
-            id: descriptor.id(),
+            _id: descriptor.id(),
             descriptor,
         }
     }

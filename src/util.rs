@@ -1,9 +1,9 @@
-use enumflags2::{BitFlags, RawBitFlags};
+use enumflags2::{BitFlag, BitFlags};
 use std::fmt;
 
-pub struct BitFlagsDebug<T: RawBitFlags>(pub BitFlags<T>);
+pub struct BitFlagsDebug<T: BitFlag>(pub BitFlags<T>);
 
-impl<T: RawBitFlags + fmt::Debug> fmt::Debug for BitFlagsDebug<T> {
+impl<T: BitFlag + fmt::Debug> fmt::Debug for BitFlagsDebug<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut it = self.0.iter().peekable();
         write!(f, "BitFlags(")?;

@@ -1,8 +1,8 @@
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use std::fmt;
 
-use super::*;
 use super::descriptor::Descriptor;
+use super::*;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
@@ -11,19 +11,20 @@ pub enum WriteKind {
     WithoutResponse = 1,
 }
 
-#[derive(BitFlags, Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[bitflags]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 #[repr(u32)]
 enum Property {
-    Broadcast                       = 0x01,
-    Read                            = 0x02,
-    WriteWithoutResponse            = 0x04,
-    Write                           = 0x08,
-    Notify                          = 0x10,
-    Indicate                        = 0x20,
-    AuthenticatedSignedWrites       = 0x40,
-    ExtendedProperties              = 0x80,
-    NotifyEncryptionRequired        = 0x100,
-    IndicateEncryptionRequired      = 0x200
+    Broadcast = 0x01,
+    Read = 0x02,
+    WriteWithoutResponse = 0x04,
+    Write = 0x08,
+    Notify = 0x10,
+    Indicate = 0x20,
+    AuthenticatedSignedWrites = 0x40,
+    ExtendedProperties = 0x80,
+    NotifyEncryptionRequired = 0x100,
+    IndicateEncryptionRequired = 0x200,
 }
 
 /// Properties of a characteristic.
@@ -109,13 +110,13 @@ impl fmt::Debug for Properties {
 pub struct Characteristic {
     id: Uuid,
     properties: Properties,
-    pub(in crate) characteristic: StrongPtr<CBCharacteristic>,
+    pub(crate) characteristic: StrongPtr<CBCharacteristic>,
 }
 
 assert_impl_all!(Characteristic: Send, Sync);
 
 impl Characteristic {
-    pub(in crate) unsafe fn retain(o: impl ObjectPtr) -> Self {
+    pub(crate) unsafe fn retain(o: impl ObjectPtr) -> Self {
         let characteristic = CBCharacteristic::wrap(o).retain();
         Self {
             id: characteristic.id(),
@@ -155,9 +156,11 @@ impl CBCharacteristic {
             let r: *mut Object = msg_send![self.as_ptr(), descriptors];
             NSArray::wrap_nullable(r)?
         };
-        Some(arr.iter()
-            .map(|v| unsafe { Descriptor::retain(v) })
-            .collect())
+        Some(
+            arr.iter()
+                .map(|v| unsafe { Descriptor::retain(v) })
+                .collect(),
+        )
     }
 
     pub fn value(&self) -> Option<Vec<u8>> {

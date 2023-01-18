@@ -3,16 +3,16 @@
 //! Some devices encrypt the data they advertise. To decrypt a key must be extracted and specified
 //! in `--key` argument. See https://github.com/custom-components/sensor.mitemp_bt/blob/master/faq.md#my-sensors-ble-advertisements-are-encrypted-how-can-i-get-the-key
 //! on how to get the key.
-use anyhow::*;
-use enumflags2::BitFlags;
-use log::*;
+use anyhow::{anyhow, Result};
+use enumflags2::{bitflags, BitFlags};
+use log::{debug, error, info, warn};
 use macaddr::MacAddr6;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::process::exit;
 
-use core_bluetooth::central::*;
-use core_bluetooth::*;
+use core_bluetooth::central::{CentralEvent, CentralManager};
+use core_bluetooth::{ManagerState, Receiver};
 
 const SERVICE: &str = "0000fe95-0000-1000-8000-00805f9b34fb";
 
@@ -37,35 +37,40 @@ impl App {
     fn handle_event(&mut self, event: CentralEvent) {
         debug!("New event: {:#?}", event);
         match event {
-            CentralEvent::ManagerStateChanged { new_state } => {
-                match new_state {
-                    ManagerState::Unsupported => {
-                        error!("Bluetooth is not supported on this system");
-                        exit(1);
-                    },
-                    ManagerState::Unauthorized => {
-                        error!("The app is not authorized to use Bluetooth on this system");
-                        exit(1);
-                    },
-                    ManagerState::PoweredOff => {
-                        error!("Bluetooth is disabled, please enable it");
-                    },
-                    ManagerState::PoweredOn => {
-                        info!("Discovering Xiaomi sensors...");
-                        self.central.scan();
-                    },
-                    _ => {},
+            CentralEvent::ManagerStateChanged { new_state } => match new_state {
+                ManagerState::Unsupported => {
+                    error!("Bluetooth is not supported on this system");
+                    exit(1);
                 }
-            }
+                ManagerState::Unauthorized => {
+                    error!("The app is not authorized to use Bluetooth on this system");
+                    exit(1);
+                }
+                ManagerState::PoweredOff => {
+                    error!("Bluetooth is disabled, please enable it");
+                }
+                ManagerState::PoweredOn => {
+                    info!("Discovering Xiaomi sensors...");
+                    self.central.scan();
+                }
+                _ => {}
+            },
             CentralEvent::PeripheralDiscovered {
-                advertisement_data,
-                ..
+                advertisement_data, ..
             } => {
-                if let Some(packet) = advertisement_data.service_data().get(SERVICE.parse().unwrap()) {
-                    match Packet::parse(packet, |mac| self.encryption_keys.get(&mac).map(|v| &v[..])) {
+                if let Some(packet) = advertisement_data
+                    .service_data()
+                    .get(SERVICE.parse().unwrap())
+                {
+                    match Packet::parse(packet, |mac| {
+                        self.encryption_keys.get(&mac).map(|v| &v[..])
+                    }) {
                         Ok(packet) => {
                             if !packet.sensor_values.is_empty() {
-                                info!("{} ({}): {:?}", packet.mac_addr, packet.device_kind, packet.sensor_values);
+                                info!(
+                                    "{} ({}): {:?}",
+                                    packet.mac_addr, packet.device_kind, packet.sensor_values
+                                );
                             } else if self.seen.insert(packet.mac_addr) {
                                 info!("New device: {} ({})", packet.mac_addr, packet.device_kind);
                             }
@@ -99,12 +104,13 @@ impl App {
     }
 }
 
-#[derive(BitFlags, Copy, Clone, Debug)]
+#[bitflags]
+#[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 enum Flag {
-    Encrypted   = 0x08,
-    HasCap      = 0x20,
-    HasData     = 0x40,
+    Encrypted = 0x08,
+    HasCap = 0x20,
+    HasData = 0x40,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -159,7 +165,6 @@ enum SensorValue {
     Temperature(f32),
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 struct Packet {
     mac_addr: MacAddr6,
@@ -169,7 +174,8 @@ struct Packet {
 
 impl Packet {
     fn parse<'a, F>(packet: &[u8], get_encryption_key: F) -> Result<Self>
-        where F: Fn(MacAddr6) -> Option<&'a [u8]>
+    where
+        F: Fn(MacAddr6) -> Option<&'a [u8]>,
     {
         debug!("parsing {} B packet: {}", packet.len(), hex::encode(packet));
         if packet.len() < 12 {
@@ -186,8 +192,13 @@ impl Packet {
         debug!("mac: {}", mac_addr);
 
         let device_kind = u16::from_be_bytes([packet[2], packet[3]]);
-        let device_kind = DeviceKind::from_u16(device_kind)
-            .ok_or_else(|| anyhow!("unrecognized device type ({}): 0x{:x}", mac_addr, device_kind))?;
+        let device_kind = DeviceKind::from_u16(device_kind).ok_or_else(|| {
+            anyhow!(
+                "unrecognized device type ({}): 0x{:x}",
+                mac_addr,
+                device_kind
+            )
+        })?;
         debug!("device_kind: {}", device_kind);
 
         if !flags.contains(Flag::HasData) {
@@ -213,7 +224,13 @@ impl Packet {
             let tag = &packet[packet.len() - 4..];
             let aad = &[0x11];
 
-            let payload = decrypt_aes_128_ccm(&packet[payload_start..packet.len() - 7], &key, &nonce, tag, aad)?;
+            let payload = decrypt_aes_128_ccm(
+                &packet[payload_start..packet.len() - 7],
+                &key,
+                &nonce,
+                tag,
+                aad,
+            )?;
             Cow::Owned(payload)
         } else {
             Cow::Borrowed(&packet[payload_start..])
@@ -245,29 +262,47 @@ impl Packet {
                     0x1210 => r.push(SensorValue::Switch(v[0])),
                     0x1310 => r.push(SensorValue::Consumable(v[0])),
                     _ => decoded = false,
-                }
+                },
                 3 => match kind {
-                    0x710 => r.push(SensorValue::Illuminance(u32::from_le_bytes([v[0], v[1], v[2], 0]))),
+                    0x710 => r.push(SensorValue::Illuminance(u32::from_le_bytes([
+                        v[0], v[1], v[2], 0,
+                    ]))),
                     _ => decoded = false,
-                }
+                },
                 2 => match kind {
-                    0x610 => r.push(SensorValue::Humidity(u16::from_le_bytes([v[0], v[1]]) as f32 / 10.0)),
-                    0x410 => r.push(SensorValue::Temperature(i16::from_le_bytes([v[0], v[1]]) as f32 / 10.0)),
-                    0x910 => r.push(SensorValue::Conductivity(u16::from_le_bytes([v[0], v[1]]) as u32)),
-                    0x1010 => r.push(SensorValue::Formaldehyde(u16::from_le_bytes([v[0], v[1]]) as f32 / 100.0)),
+                    0x610 => r.push(SensorValue::Humidity(
+                        u16::from_le_bytes([v[0], v[1]]) as f32 / 10.0,
+                    )),
+                    0x410 => r.push(SensorValue::Temperature(
+                        i16::from_le_bytes([v[0], v[1]]) as f32 / 10.0,
+                    )),
+                    0x910 => r.push(SensorValue::Conductivity(
+                        u16::from_le_bytes([v[0], v[1]]) as u32
+                    )),
+                    0x1010 => r.push(SensorValue::Formaldehyde(
+                        u16::from_le_bytes([v[0], v[1]]) as f32 / 100.0,
+                    )),
                     _ => decoded = false,
-                }
+                },
                 4 => match kind {
                     0xd10 => {
-                        r.push(SensorValue::Temperature(i16::from_le_bytes([v[0], v[1]]) as f32 / 10.0));
-                        r.push(SensorValue::Humidity(u16::from_le_bytes([v[2], v[3]]) as f32 / 10.0));
+                        r.push(SensorValue::Temperature(
+                            i16::from_le_bytes([v[0], v[1]]) as f32 / 10.0,
+                        ));
+                        r.push(SensorValue::Humidity(
+                            u16::from_le_bytes([v[2], v[3]]) as f32 / 10.0,
+                        ));
                     }
                     _ => decoded = false,
-                }
+                },
                 _ => decoded = false,
             }
             if !decoded {
-                warn!("couldn't decode sensor value: kind={:x} value={}", kind, hex::encode(v));
+                warn!(
+                    "couldn't decode sensor value: kind={:x} value={}",
+                    kind,
+                    hex::encode(v)
+                );
             }
         }
         Ok(Self {
@@ -278,14 +313,20 @@ impl Packet {
     }
 }
 
-fn decrypt_aes_128_ccm(ciphertext: &[u8], key: &[u8], nonce: &[u8], tag: &[u8], aad: &[u8]) -> Result<Vec<u8>> {
+fn decrypt_aes_128_ccm(
+    ciphertext: &[u8],
+    key: &[u8],
+    nonce: &[u8],
+    tag: &[u8],
+    aad: &[u8],
+) -> Result<Vec<u8>> {
     // Unfortunately Rust OpenSSL wrapper doesn't work with non-standard AES CCM tags and there's no
     // safe alternative.
     // See https://github.com/sfackler/rust-openssl/issues/1237
 
     use openssl_sys::*;
-    use std::ptr::{null, null_mut};
     use std::convert::TryInto;
+    use std::ptr::{null, null_mut};
 
     unsafe {
         let cipher = EVP_aes_128_ccm();
@@ -299,11 +340,20 @@ fn decrypt_aes_128_ccm(ciphertext: &[u8], key: &[u8], nonce: &[u8], tag: &[u8], 
         EVP_DecryptInit_ex(ctx, cipher, null_mut(), null(), null());
 
         // Set nonce length
-        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, nonce.len().try_into().unwrap(), null_mut());
+        EVP_CIPHER_CTX_ctrl(
+            ctx,
+            EVP_CTRL_GCM_SET_IVLEN,
+            nonce.len().try_into().unwrap(),
+            null_mut(),
+        );
 
         // Set expected tag value
-        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG,
-                            tag.len().try_into().unwrap(), tag.as_ptr() as *mut _);
+        EVP_CIPHER_CTX_ctrl(
+            ctx,
+            EVP_CTRL_GCM_SET_TAG,
+            tag.len().try_into().unwrap(),
+            tag.as_ptr() as *mut _,
+        );
 
         // Specify key and noce
         EVP_DecryptInit_ex(ctx, null(), null_mut(), key.as_ptr(), nonce.as_ptr());
@@ -313,10 +363,22 @@ fn decrypt_aes_128_ccm(ciphertext: &[u8], key: &[u8], nonce: &[u8], tag: &[u8], 
         EVP_DecryptUpdate(ctx, null_mut(), &mut out_len, null(), ciphertext_len);
 
         // Set AAD
-        EVP_DecryptUpdate(ctx, null_mut(), &mut out_len, aad.as_ptr(), aad.len().try_into().unwrap());
+        EVP_DecryptUpdate(
+            ctx,
+            null_mut(),
+            &mut out_len,
+            aad.as_ptr(),
+            aad.len().try_into().unwrap(),
+        );
 
         // Decrypt plaintext, verify tag
-        let r = EVP_DecryptUpdate(ctx, out.as_mut_ptr(), &mut out_len, ciphertext.as_ptr(), ciphertext_len);
+        let r = EVP_DecryptUpdate(
+            ctx,
+            out.as_mut_ptr(),
+            &mut out_len,
+            ciphertext.as_ptr(),
+            ciphertext_len,
+        );
 
         if r > 0 {
             out.truncate(out_len as usize);
@@ -340,14 +402,19 @@ mod test {
         let tag = hex!("b3f39389");
         let aad = &[0x11];
 
-        assert_eq!(decrypt_aes_128_ccm(&ciphertext, &key, &nonce, &tag, aad).unwrap(),
-            b"\x06\x10\x02\xae\x01"[..].to_vec())
+        assert_eq!(
+            decrypt_aes_128_ccm(&ciphertext, &key, &nonce, &tag, aad).unwrap(),
+            b"\x06\x10\x02\xae\x01"[..].to_vec()
+        )
     }
 
     #[test]
     fn parse_() {
         let mut keys = HashMap::new();
-        keys.insert(MacAddr6(hex!("a4c138c0039e")), hex!("0f8fbcfc7d41c89c9b486b44e67be743"));
+        keys.insert(
+            MacAddr6(hex!("a4c138c0039e")),
+            hex!("0f8fbcfc7d41c89c9b486b44e67be743"),
+        );
         let parse = |packet| Packet::parse(packet, |mac| keys.get(&mac).map(|v| &v[..])).unwrap();
 
         let exp_packet = |sensor_values| Packet {
@@ -356,36 +423,35 @@ mod test {
             sensor_values,
         };
 
-        assert_eq!(parse(&hex!("58585b05329e03c038c1a47f4258f2a8000000b3f39389")),
-            exp_packet(vec![SensorValue::Humidity(43.0)]));
-        assert_eq!(parse(&hex!("0201060f1695fe30585b056e9e03c038c1a408")),
-            exp_packet(vec![]));
+        assert_eq!(
+            parse(&hex!("58585b05329e03c038c1a47f4258f2a8000000b3f39389")),
+            exp_packet(vec![SensorValue::Humidity(43.0)])
+        );
+        assert_eq!(
+            parse(&hex!("0201060f1695fe30585b056e9e03c038c1a408")),
+            exp_packet(vec![])
+        );
     }
 }
 
 pub fn main() -> Result<()> {
-    env_logger::from_env(env_logger::Env::default()
-        .default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     use clap::Arg;
-    let clapp = clap::App::new("Xiaomi Passive Sensor Reader")
+    let clapp = clap::Command::new("Xiaomi Passive Sensor Reader")
         .about("Reads advertised sensor values from variety of Xiaomi BTLE devices")
-        .arg(Arg::with_name("keys")
+        .arg(Arg::new("keys")
             .short('k')
             .long("key")
-            .about("Sets encryption key for device in format --key=a4:c1:38:c0:03:9e=0f8fbcfc7d41c89c9b486b44e67be743")
-            .takes_value(true)
-            .multiple(true));
+            .help("Sets encryption key for device in format --key=a4:c1:38:c0:03:9e=0f8fbcfc7d41c89c9b486b44e67be743")
+            .required(true));
     let matches = clapp.get_matches();
 
     let mut keys = HashMap::new();
-    for key in matches.values_of("keys").unwrap_or_default() {
-        let (mac_addr, key) = Some(key.split("=")
-            .collect::<Vec<_>>())
+    for key in matches.try_get_many::<String>("keys").unwrap().unwrap() {
+        let (mac_addr, key) = Some(key.split("=").collect::<Vec<_>>())
             .filter(|v| v.len() == 2 && v[1].len() == 32)
-            .and_then(|v| {
-                Some((v[0].parse::<MacAddr6>().ok()?, hex::decode(v[1]).ok()?))
-            })
+            .and_then(|v| Some((v[0].parse::<MacAddr6>().ok()?, hex::decode(v[1]).ok()?)))
             .ok_or_else(|| anyhow!("invalid 'key' argument: {}", key))?;
         keys.insert(mac_addr, key);
     }
